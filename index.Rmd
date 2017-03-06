@@ -1,30 +1,98 @@
 ---
-title: "index"
-author: "Herman"
+title: "Final assignment"
+author: "Herman Savinen (herman.savinen@helsinki.fi)"
 date: "February 27, 2017"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+*This little study aimed to examine how people could be grouped to different learning profiles based on their learning approaches, attitude and learning success. K-means clustering was performed with an international survey data to group the observations and Linear Discriminant anaysis was used to examine the differences between the 3 discovered clusters of learners. According to this analysis, surface learning approach defined the cluser with lowest test scores, while deep and strategic learning and positive attitude were more present with cluster that had higher test scores. *
+
+
+```{r}
+learning2014 <- read.csv("C:/Users/Admin/Documents/GitHub/IODS-project/data/learning2014.csv")
 ```
 
-## R Markdown
+The data originates from an international survey of approaches to learning and holds 166 observations of 7 variables. Following variables have been combined from several answers:
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+- Deep, measuring deep learning approach
+- Stra, measuring strategic learning approach
+- Surf, measuring surface learning approach
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+The structure and dimensions of the data:
 
-```{r cars}
-summary(cars)
+```{r}
+str(learning2014)
 ```
 
-## Including Plots
+Exploratory analysis by ggpairs -visualisation. Strongest correlation can be found between points and attitude. Surface and deep learning approaches seem to be negatively correlated as one would expect. It also suggests that deep lerning approach and strategic learning approach could be associated with more points and surface learning approach with less points.
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(GGally)
+ggpairs(learning2014)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+So the inital hypothesis is that there are diffrents student "types" with different combinations of learning aproaches, attitudes and levels of success. We can try to explore these hypothetical groups by statistical clustering. 
+
+The method chosen here is k-means clustering, which tries to partition n observations into k clusters in which each observation belongs to the cluster with the nearest mean. This works best if the variables in question are continuous and have the same variances so next up is the standardization of  variables.
+
+```{r}
+learning <- subset(learning2014, select=-gender)
+learning <- subset(learning, select=-Age)
+learning_scaled <- scale(learning)
+learning_scaled <- as.data.frame(learning_scaled)
+summary(learning_scaled)
+```
+
+
+With the scaled variables, k-means is performed using the euclidean distance matrix.  It is done muliple times with different numbers of clusters since the right number can be decided by looking at how the total of within cluster sum of squares (WCSS). The best number should be the one where WCSS drops rapidly.
+
+
+```{r}
+set.seed(123)
+dist_learning <- dist(learning_scaled)
+k_max <- 10
+twcss <- sapply(1:k_max, function(k){kmeans(dist_learning, k)$tot.withinss})
+plot(1:k_max, twcss, type='b')
+```
+
+Judging from the plot, 3 clusters is appropriate. 
+
+
+```{r}
+km <-kmeans(dist_learning, centers = 3)
+pairs(learning_scaled, col = km$cluster)
+```
+
+
+Now that we have our three clusters of students, the question that comes up is what makes the differences between them? Liner Discriminant Analysis can be used to answer this. 
+
+
+```{r}
+library(MASS)
+learning_scaled$cl <- km$cluster 
+lda.fit <- lda(cl ~ ., data = learning_scaled)
+
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0,
+         x1 = myscale * heads[,choices[1]],
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads),
+       cex = tex, col=color, pos=3)
+}
+
+
+lda.fit
+plot(lda.fit, col=as.numeric(learning_scaled$cl), dimen=2)
+lda.arrows(lda.fit, myscale = 3, col = "#666666")
+```
+
+From the proportion of trace, it's evident that Linear discriminant 1 is the more important one. Basically the surface learning approach is opposed to all the other variables, especially points. One could interpret the three clusters as bad students, mediocre students, and good sudents. This tells the same story as the first exploratry analysis with plotting. Low points are associated with the surface learning approach and bad attitude.
+
+
+
+
+
